@@ -7,6 +7,7 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 import pytesseract
 
+
 import imutils
 
 def deep_copy_params(to_call):
@@ -22,6 +23,13 @@ def findLastNonZeroElement(lst):
 
 def findFirstNonZeroElement(lst):
   return [index for index, item in enumerate(lst) if item != 0][0]
+
+
+@deep_copy_params
+def crop(image):
+    y_nonzero, x_nonzero = np.nonzero(image)
+    return image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
+
 
 @deep_copy_params
 def trimWhitespace(img):
@@ -101,7 +109,7 @@ def eliminateYTitle(img):
   cnts = cnts[0] if len(cnts) == 2 else cnts[1]
   for c in cnts:
     x,y,w,h = cv2.boundingRect(c)
-    if (x+w) > width/2:
+    if (x+w//1.5) > width/2:
       # cv2.rectangle(img, (x, y), (x + w, y + h), 0, 2)
       x_min = min(x_min, x)
   x_min = max(0, x_min-5)
@@ -129,11 +137,13 @@ def eliminateYTicks(img):
   x_max = min(width-1, x_max+5)
   return img[:,:x_max] # crop the portion containing y-axis tick marks
 
+
 @deep_copy_params
 def getYlabel(img, xaxis):
+  label_images = []
   ylabels = []
   ypixels = []
-  img = img[:,:xaxis['start']-5]
+  img = img[:,:max(0,xaxis['start']-5)]
 
   # Eliminate y title and tick marks
   img = eliminateYTitle(img)
@@ -144,23 +154,53 @@ def getYlabel(img, xaxis):
   blur = cv2.GaussianBlur(img, (7,7), 0)
   thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
 
-  kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2,4))
+  kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2,1))
   dilate = cv2.dilate(thresh, kernel, iterations=4)
 
   cnts = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
   cnts = cnts[0] if len(cnts) == 2 else cnts[1]
   for c in cnts:
     x,y,w,h = cv2.boundingRect(c)
-    cv2.rectangle(img, (x, y), (x + w, y + h), 0, 2)
+    # cv2.rectangle(img, (x, y), (x + w, y + h), 0, 2)
     ypixels.append(y+h//2)
-    label_image = img[y:y+h, x:x+h]
-    label_image = imutils.resize(label_image, width=1400)
-    text = pytesseract.image_to_string(label_image, lang="eng", config="--psm 11 digits")
-    print(text)
+    margin = 5
+    label_images.append(img[max(0,y-margin):min(height,y+h+margin), 
+                            max(0,x-margin):min(width,x+w+margin)])
+    
+  ylabels = [None]*len(ypixels)
+  for i,lab in enumerate(label_images):
+    lab = cv2.resize(lab, None, fx=10.5, fy=10.5, interpolation=cv2.INTER_CUBIC)
+    kernel = np.ones((1, 1), np.uint8)
+    lab = cv2.dilate(lab, kernel, iterations=4)
+    _, lab = cv2.threshold(lab, 200, 255, cv2.THRESH_BINARY)
+    lab = cv2.GaussianBlur(lab,(5,5),0)
+    text = pytesseract.image_to_string(lab, lang="eng", config="--psm 6 digits")
+    # print(f"Label{i}: {text}")
+    try:
+      ylabels[i] = float(text)
+    except:
+      pass
+    label_images[i] = lab
+    # cv2.imshow(f'label{i}', lab)
 
-  cv2.imshow('thresh', thresh)
-  cv2.imshow('dilate', dilate)
-  cv2.imshow('image', img)
+  if (len(ylabels)-ylabels.count(None) < 3):
+    # Not enough points to perform linear interpolation
+    # We suspect that the numbers are rotated 90 deg CCW
+    for i,lab in enumerate(label_images):
+      lab = imutils.rotate(lab, -90)
+      lab = crop(lab)
+      text = pytesseract.image_to_string(lab, lang="eng", config="--psm 6 digits")
+      # print(f"Label{i}: {text}")
+      try:
+        ylabels[i] = float(text)
+      except:
+        pass
+      label_images[i] = lab
+      # cv2.imshow(f'label{i}', lab)
+
+  # cv2.imshow('thresh', thresh)
+  # cv2.imshow('dilate', dilate)
+  # cv2.imshow('image', img)
   cv2.waitKey(0)
   cv2.destroyAllWindows()
 
@@ -179,11 +219,12 @@ def getYlabel(img, xaxis):
 
   plt.subplot(3,3,8),plt.imshow(img,cmap = 'gray')
   plt.title('Behind Y axis'), plt.xticks([]), plt.yticks([])
-  return ypixels
+  zipped_y = zip(ypixels, ylabels)
+  return zipped_y
 
 
 def getLabels(img, xaxis, yaxis):
-  ypixels = getYlabel(img, xaxis)
+  zipped_y = getYlabel(img, xaxis)
   # behind_yaxis = cv2.resize(behind_yaxis, None, fx=10, fy=10, interpolation=cv2.INTER_CUBIC)
   # retval, behind_yaxis = cv2.threshold(behind_yaxis, 125, 255, cv2.THRESH_BINARY)
   # behind_yaxis = cv2.adaptiveThreshold(behind_yaxis, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 115, 1)
@@ -202,7 +243,7 @@ def getLabels(img, xaxis, yaxis):
   plt.subplot(3,3,9),plt.imshow(below_xaxis,cmap = 'gray')
   plt.title('Below X axis'), plt.xticks([]), plt.yticks([])
 
-  return ypixels
+  return zipped_y
 
 
 def main():
@@ -212,16 +253,17 @@ def main():
   args = parser.parse_args()
 
   # Read file
+  # filename = 'images/Line-Chart4.png'
   filename = f'images/Line-Chart{args.n}.png'
   img = cv2.imread(filename, 0) # read as grayscale image
   
   # Processing
   trimmed_img = trimWhitespace(img)
   xaxis, yaxis = getAxes(trimmed_img)
-  ypixels = getLabels(trimmed_img, xaxis, yaxis)
+  zipped_y = getLabels(trimmed_img, xaxis, yaxis)
 
   print(f"X-axis: {xaxis}\nY-axis: {yaxis}")
-  print("Y pixels:\n", ypixels)
+  print("Y pixels:\n", list(zipped_y))
   
   # to maximize
   plt.get_current_fig_manager().full_screen_toggle()
