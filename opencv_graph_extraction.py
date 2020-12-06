@@ -1,22 +1,16 @@
 # trunc8 did this
 import argparse
-import copy
 import cv2
-import imutils
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
-import pytesseract
 
-from axis_processing import ( eliminateYTitle,
-                              eliminateYTicks,
-                              eliminateXTitle,
-                              eliminateXTicks )
 from helper_functions import ( deep_copy_params,
                                findLastNonZeroElement,
                                findFirstNonZeroElement,
                                crop )
-
+from label_reader import ( getXlabel,
+                           getYlabel )
 
 @deep_copy_params
 def trimWhitespace(img):
@@ -81,144 +75,55 @@ def getAxes(img):
   return [xaxis, yaxis]
 
 
-@deep_copy_params
-def getYlabel(img, xaxis):
-  label_images = []
-  ylabels = []
-  ypixels = []
-  img = img[:,:max(0,xaxis['start']-5)]
-
-  # Eliminate y title and tick marks
-  img = eliminateYTitle(img)
-  img = eliminateYTicks(img)
-  
-  # Obtain labels
-  height, width = img.shape
-  blur = cv2.GaussianBlur(img, (7,7), 0)
-  thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-
-  kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2,1))
-  dilate = cv2.dilate(thresh, kernel, iterations=4)
-
-  cnts = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-  cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-  for c in cnts:
-    x,y,w,h = cv2.boundingRect(c)
-    # cv2.rectangle(img, (x, y), (x + w, y + h), 0, 2)
-    ypixels.append(y+h//2)
-    margin = 5
-    label_images.append(img[max(0,y-margin):min(height,y+h+margin), 
-                            max(0,x-margin):min(width,x+w+margin)])
-    
-  ylabels = [None]*len(ypixels)
-  for i,lab in enumerate(label_images):
-    lab = cv2.resize(lab, None, fx=10.5, fy=10.5, interpolation=cv2.INTER_CUBIC)
-    kernel = np.ones((1, 1), np.uint8)
-    lab = cv2.dilate(lab, kernel, iterations=4)
-    _, lab = cv2.threshold(lab, 200, 255, cv2.THRESH_BINARY)
-    lab = cv2.GaussianBlur(lab,(5,5),0)
-    text = pytesseract.image_to_string(lab, lang="eng", config="--psm 6 digits")
-    # print(f"Label{i}: {text}")
-    try:
-      ylabels[i] = float(text)
-    except:
-      pass
-    label_images[i] = lab
-    # cv2.imshow(f'label{i}', lab)
-
-  if (len(ylabels)-ylabels.count(None) < 3):
-    # Not enough points to perform linear interpolation
-    # We suspect that the numbers are rotated 90 deg CCW
-    for i,lab in enumerate(label_images):
-      lab = imutils.rotate(lab, -90)
-      lab = crop(lab)
-      text = pytesseract.image_to_string(lab, lang="eng", config="--psm 6 digits")
-      # print(f"Label{i}: {text}")
-      try:
-        ylabels[i] = float(text)
-      except:
-        pass
-      label_images[i] = lab
-      # cv2.imshow(f'label{i}', lab)
-
-  # cv2.imshow('thresh', thresh)
-  # cv2.imshow('dilate', dilate)
-  # cv2.imshow('image', img)
-  cv2.waitKey(0)
-  cv2.destroyAllWindows()
-
-  plt.subplot(3,3,8),plt.imshow(img,cmap = 'gray')
-  plt.title('Behind Y axis'), plt.xticks([]), plt.yticks([])
-
-  zipped_y = zip(ypixels, ylabels)
-  return zipped_y
-
-
-@deep_copy_params
-def getXlabel(img, yaxis):
-  label_images = []
-  xlabels = []
-  xpixels = []
-  img = img[yaxis['end']+10:,:]
-
-  # Eliminate y title and tick marks
-  img = eliminateXTitle(img)
-  img = eliminateXTicks(img)
-  
-  # Obtain labels
-  height, width = img.shape
-  blur = cv2.GaussianBlur(img, (7,7), 0)
-  thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-
-  kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,1))
-  dilate = cv2.dilate(thresh, kernel, iterations=4)
-
-  cnts = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-  cnts = cnts[0] if len(cnts) == 2 else cnts[1]
-  for c in cnts:
-    x,y,w,h = cv2.boundingRect(c)
-    # cv2.rectangle(img, (x, y), (x + w, y + h), 0, 2)
-    xpixels.append(x+w//2)
-    margin = 5
-    label_images.append(img[max(0,y-margin):min(height,y+h+margin), 
-                            max(0,x-margin):min(width,x+w+margin)])
-    
-  xlabels = [None]*len(xpixels)
-  for i,lab in enumerate(label_images):
-    lab = cv2.resize(lab, None, fx=10.5, fy=10.5, interpolation=cv2.INTER_CUBIC)
-    kernel = np.ones((1, 1), np.uint8)
-    lab = cv2.dilate(lab, kernel, iterations=4)
-    _, lab = cv2.threshold(lab, 200, 255, cv2.THRESH_BINARY)
-    lab = cv2.GaussianBlur(lab,(5,5),0)
-    text = pytesseract.image_to_string(lab, lang="eng", config="--psm 6 digits")
-    # print(f"Label{i}: {text}")
-    try:
-      xlabels[i] = float(text)
-    except:
-      pass
-    label_images[i] = lab
-    # cv2.imshow(f'label{i}', lab)
-
-  # cv2.imshow('thresh', thresh)
-  # cv2.imshow('dilate', dilate)
-  # cv2.imshow('image', img)
-  cv2.waitKey(0)
-  cv2.destroyAllWindows()
-
-  plt.subplot(3,3,9),plt.imshow(img,cmap = 'gray')
-  plt.title('Below X axis'), plt.xticks([]), plt.yticks([])
-
-  zipped_x = zip(xpixels, xlabels)
-  return zipped_x
-
-
 def getLabels(img, xaxis, yaxis):
-  # zipped_x = None
-  # zipped_y = None
   zipped_x = getXlabel(img, yaxis)
   zipped_y = getYlabel(img, xaxis)
   return [zipped_x,zipped_y]
 
+
+@deep_copy_params
+def extractPlot(img, xaxis, yaxis):
+  margin = 4
+  img = img[yaxis['start']+margin:yaxis['end']-margin, 
+            xaxis['start']+margin:xaxis['end']-margin]
+  h,w = img.shape[:2]
+  mask = np.zeros((h,w), np.uint8)
+
+  # Transform to gray colorspace and threshold the image
+  gray = img
+  _, thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+
+  # Perform opening on the thresholded image (erosion followed by dilation)
+  kernel = np.ones((2,2),np.uint8)
+  opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+
+  # Search for contours and select the biggest one and draw it on mask
+  contours, hierarchy = cv2.findContours(opening,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
+  cnt = max(contours, key=cv2.contourArea)
+  cv2.drawContours(mask, [cnt], 0, 255, -1)
+
+  # Perform a bitwise operation
+  res = cv2.bitwise_and(img, img, mask=mask)
+
+  # Threshold the image again
+  gray = img
+  _, thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+
+  # Find all non white pixels
+  non_zero = cv2.findNonZero(thresh)
+
+  # Transform all other pixels in non_white to white
+  for i in range(0, len(non_zero)):
+      first_x = non_zero[i][0][0]
+      first_y = non_zero[i][0][1]
+      first = res[first_y, first_x]
+      res[first_y, first_x] = 255
+
+  # Display the image
+  cv2.imshow('original', img)
+  cv2.imshow('img', res)
+  cv2.waitKey(0)
+  cv2.destroyAllWindows()
 
 def main():
   # Read args from terminal
@@ -227,9 +132,10 @@ def main():
   args = parser.parse_args()
 
   # Read file
-  # filename = 'images/Line-Chart4.png'
+  # filename = 'images/Line-Chart4.jpeg'
   filename = f'images/Line-Chart{args.n}.png'
-  img = cv2.imread(filename, 0) # read as grayscale image
+  color_img = cv2.imread(filename)
+  img = cv2.cvtColor(color_img, cv2.COLOR_BGR2GRAY)
   
   # Processing
   trimmed_img = trimWhitespace(img)
@@ -239,6 +145,7 @@ def main():
   print(f"X-axis: {xaxis}\nY-axis: {yaxis}")
   print("X pixels:\n", list(zipped_x))
   print("Y pixels:\n", list(zipped_y))
+  extractPlot(trimmed_img, xaxis, yaxis)
   
   # to maximize
   plt.get_current_fig_manager().full_screen_toggle()
