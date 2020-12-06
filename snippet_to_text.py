@@ -7,7 +7,7 @@ import pytesseract
 
 # Read args from terminal
 parser = argparse.ArgumentParser(description="Extract text from input image")
-parser.add_argument("-i", "--image", default="test.png", help="image file path")
+parser.add_argument("-i", "--image", default="images/test.png", help="image file path")
 args = parser.parse_args()
 
 # Perform OCR using tesseract
