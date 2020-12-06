@@ -2,33 +2,16 @@
 import argparse
 import copy
 import cv2
+import imutils
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 import pytesseract
 
-
-import imutils
-
-def deep_copy_params(to_call):
-  def f(*args, **kwargs):
-    return to_call(*(copy.deepcopy(x) for x in args),
-                   **{k: copy.deepcopy(v) for k, v in kwargs.items()})
-  return f
-
-
-def findLastNonZeroElement(lst):
-  return [index for index, item in enumerate(lst) if item != 0][-1]
-
-
-def findFirstNonZeroElement(lst):
-  return [index for index, item in enumerate(lst) if item != 0][0]
-
-
-@deep_copy_params
-def crop(image):
-    y_nonzero, x_nonzero = np.nonzero(image)
-    return image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]
+from helper_functions import ( deep_copy_params,
+                               findLastNonZeroElement,
+                               findFirstNonZeroElement,
+                               crop )
 
 
 @deep_copy_params
@@ -204,46 +187,18 @@ def getYlabel(img, xaxis):
   cv2.waitKey(0)
   cv2.destroyAllWindows()
 
-  # # Rescale the image, if needed.
-  # img = cv2.resize(img, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
-
-  # # Apply dilation and erosion to remove some noise
-  # kernel = np.ones((1, 1), np.uint8)
-  # img = cv2.dilate(img, kernel, iterations=1)
-  # img = cv2.erode(img, kernel, iterations=1)
-  # # Apply blur to smooth out the edges
-  # img = cv2.GaussianBlur(img, (5, 5), 0)
-
-  # text = pytesseract.image_to_string(img, lang="eng", config="--psm 6 digits")
-  # print(f'Y axis text\n{text}')
-
   plt.subplot(3,3,8),plt.imshow(img,cmap = 'gray')
   plt.title('Behind Y axis'), plt.xticks([]), plt.yticks([])
+
   zipped_y = zip(ypixels, ylabels)
   return zipped_y
 
 
 def getLabels(img, xaxis, yaxis):
+  zipped_x = None
+  # zipped_x = getXlabel(img, yaxis)
   zipped_y = getYlabel(img, xaxis)
-  # behind_yaxis = cv2.resize(behind_yaxis, None, fx=10, fy=10, interpolation=cv2.INTER_CUBIC)
-  # retval, behind_yaxis = cv2.threshold(behind_yaxis, 125, 255, cv2.THRESH_BINARY)
-  # behind_yaxis = cv2.adaptiveThreshold(behind_yaxis, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 115, 1)
-  # retval,behind_yaxis = cv2.threshold(behind_yaxis,125,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-  # text = pytesseract.image_to_string(behind_yaxis, lang="eng", config="--psm 11")
-  # print(f'Y axis text\n{text}')
-
-  
-  # retval, below_xaxis = cv2.threshold(below_xaxis, 125, 255, cv2.THRESH_BINARY)
-  # below_xaxis = cv2.adaptiveThreshold(below_xaxis, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 115, 1)
-  # retval,below_xaxis = cv2.threshold(below_xaxis,125,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-  # text = pytesseract.image_to_string(below_xaxis, lang="eng", config="--psm 11")
-  # print(f'X axis text\n{text}')
-
-  below_xaxis = img[yaxis['end']:]
-  plt.subplot(3,3,9),plt.imshow(below_xaxis,cmap = 'gray')
-  plt.title('Below X axis'), plt.xticks([]), plt.yticks([])
-
-  return zipped_y
+  return [zipped_x,zipped_y]
 
 
 def main():
@@ -260,7 +215,7 @@ def main():
   # Processing
   trimmed_img = trimWhitespace(img)
   xaxis, yaxis = getAxes(trimmed_img)
-  zipped_y = getLabels(trimmed_img, xaxis, yaxis)
+  _, zipped_y = getLabels(trimmed_img, xaxis, yaxis)
 
   print(f"X-axis: {xaxis}\nY-axis: {yaxis}")
   print("Y pixels:\n", list(zipped_y))
