@@ -1,10 +1,20 @@
 # trunc8 did this
 import argparse
+import copy
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 import pytesseract
+
+import imutils
+
+def deep_copy_params(to_call):
+  def f(*args, **kwargs):
+    return to_call(*(copy.deepcopy(x) for x in args),
+                   **{k: copy.deepcopy(v) for k, v in kwargs.items()})
+  return f
+
 
 def findLastNonZeroElement(lst):
   return [index for index, item in enumerate(lst) if item != 0][-1]
@@ -13,10 +23,10 @@ def findLastNonZeroElement(lst):
 def findFirstNonZeroElement(lst):
   return [index for index, item in enumerate(lst) if item != 0][0]
 
-
+@deep_copy_params
 def trimWhitespace(img):
   height, width = img.shape
-  margin = 10
+  margin = 5
   img_copy = 255*(img < 128).astype(np.uint8) # To invert the text to white
   coords = cv2.findNonZero(img_copy) # Find all non-zero points (text)
   x, y, w, h = cv2.boundingRect(coords) # Find minimum spanning bounding box
@@ -76,19 +86,123 @@ def getAxes(img):
   return [xaxis, yaxis]
 
 
+def eliminateYTitle(img):
+  height, width = img.shape
+  blur = cv2.GaussianBlur(img, (7,7), 0)
+  thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+
+  # Create rectangular structuring element and dilate
+  kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2,4))
+  dilate = cv2.dilate(thresh, kernel, iterations=4)
+
+  # Eliminate y title
+  x_min = width-1
+  cnts = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+  cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+  for c in cnts:
+    x,y,w,h = cv2.boundingRect(c)
+    if (x+w) > width/2:
+      # cv2.rectangle(img, (x, y), (x + w, y + h), 0, 2)
+      x_min = min(x_min, x)
+  x_min = max(0, x_min-5)
+  return img[:,x_min:] # crop the portion containing y-axis title
+
+
+def eliminateYTicks(img):
+  height, width = img.shape
+  blur = cv2.GaussianBlur(img, (7,7), 0)
+  thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+
+  # Create rectangular structuring element and dilate
+  kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2,4))
+  dilate = cv2.dilate(thresh, kernel, iterations=4)
+
+  # Eliminate ticks
+  x_max = 0
+  cnts = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+  cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+  for c in cnts:
+    x,y,w,h = cv2.boundingRect(c)
+    if x-10 < width/2:
+      # cv2.rectangle(img, (x, y), (x + w, y + h), 0, 2)
+      x_max = max(x_max, x+w)
+  x_max = min(width-1, x_max+5)
+  return img[:,:x_max] # crop the portion containing y-axis tick marks
+
+@deep_copy_params
+def getYlabel(img, xaxis):
+  ylabels = []
+  ypixels = []
+  img = img[:,:xaxis['start']-5]
+
+  # Eliminate y title and tick marks
+  img = eliminateYTitle(img)
+  img = eliminateYTicks(img)
+  
+  # Obtain labels
+  height, width = img.shape
+  blur = cv2.GaussianBlur(img, (7,7), 0)
+  thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+
+  kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2,4))
+  dilate = cv2.dilate(thresh, kernel, iterations=4)
+
+  cnts = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+  cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+  for c in cnts:
+    x,y,w,h = cv2.boundingRect(c)
+    cv2.rectangle(img, (x, y), (x + w, y + h), 0, 2)
+    ypixels.append(y+h//2)
+    label_image = img[y:y+h, x:x+h]
+    label_image = imutils.resize(label_image, width=1400)
+    text = pytesseract.image_to_string(label_image, lang="eng", config="--psm 11 digits")
+    print(text)
+
+  cv2.imshow('thresh', thresh)
+  cv2.imshow('dilate', dilate)
+  cv2.imshow('image', img)
+  cv2.waitKey(0)
+  cv2.destroyAllWindows()
+
+  # # Rescale the image, if needed.
+  # img = cv2.resize(img, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
+
+  # # Apply dilation and erosion to remove some noise
+  # kernel = np.ones((1, 1), np.uint8)
+  # img = cv2.dilate(img, kernel, iterations=1)
+  # img = cv2.erode(img, kernel, iterations=1)
+  # # Apply blur to smooth out the edges
+  # img = cv2.GaussianBlur(img, (5, 5), 0)
+
+  # text = pytesseract.image_to_string(img, lang="eng", config="--psm 6 digits")
+  # print(f'Y axis text\n{text}')
+
+  plt.subplot(3,3,8),plt.imshow(img,cmap = 'gray')
+  plt.title('Behind Y axis'), plt.xticks([]), plt.yticks([])
+  return ypixels
+
+
 def getLabels(img, xaxis, yaxis):
-  behind_yaxis = img[:,:xaxis['start']]
-  text = pytesseract.image_to_string(behind_yaxis, lang="eng", config="--psm 11")
-  print(f'Y axis text\n{text}')
+  ypixels = getYlabel(img, xaxis)
+  # behind_yaxis = cv2.resize(behind_yaxis, None, fx=10, fy=10, interpolation=cv2.INTER_CUBIC)
+  # retval, behind_yaxis = cv2.threshold(behind_yaxis, 125, 255, cv2.THRESH_BINARY)
+  # behind_yaxis = cv2.adaptiveThreshold(behind_yaxis, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 115, 1)
+  # retval,behind_yaxis = cv2.threshold(behind_yaxis,125,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+  # text = pytesseract.image_to_string(behind_yaxis, lang="eng", config="--psm 11")
+  # print(f'Y axis text\n{text}')
+
+  
+  # retval, below_xaxis = cv2.threshold(below_xaxis, 125, 255, cv2.THRESH_BINARY)
+  # below_xaxis = cv2.adaptiveThreshold(below_xaxis, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 115, 1)
+  # retval,below_xaxis = cv2.threshold(below_xaxis,125,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+  # text = pytesseract.image_to_string(below_xaxis, lang="eng", config="--psm 11")
+  # print(f'X axis text\n{text}')
 
   below_xaxis = img[yaxis['end']:]
-  text = pytesseract.image_to_string(below_xaxis, lang="eng", config="--psm 11")
-  print(f'X axis text\n{text}')
-
-  plt.subplot(3,3,8),plt.imshow(behind_yaxis,cmap = 'gray')
-  plt.title('Behind Y axis'), plt.xticks([]), plt.yticks([])
   plt.subplot(3,3,9),plt.imshow(below_xaxis,cmap = 'gray')
   plt.title('Below X axis'), plt.xticks([]), plt.yticks([])
+
+  return ypixels
 
 
 def main():
@@ -104,13 +218,14 @@ def main():
   # Processing
   trimmed_img = trimWhitespace(img)
   xaxis, yaxis = getAxes(trimmed_img)
-  getLabels(trimmed_img, xaxis, yaxis)
+  ypixels = getLabels(trimmed_img, xaxis, yaxis)
 
   print(f"X-axis: {xaxis}\nY-axis: {yaxis}")
+  print("Y pixels:\n", ypixels)
   
   # to maximize
   plt.get_current_fig_manager().full_screen_toggle()
-  plt.show()
+  # plt.show()
 
 
 if __name__=='__main__':
