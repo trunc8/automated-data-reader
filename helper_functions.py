@@ -19,6 +19,6 @@ def findFirstNonZeroElement(lst):
 
 
 @deep_copy_params
-def crop(image):
+def crop_black_border(image):
   y_nonzero, x_nonzero = np.nonzero(image)
   return image[np.min(y_nonzero):np.max(y_nonzero), np.min(x_nonzero):np.max(x_nonzero)]

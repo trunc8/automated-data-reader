@@ -7,8 +7,7 @@ import numpy as np
 
 from helper_functions import ( deep_copy_params,
                                findLastNonZeroElement,
-                               findFirstNonZeroElement,
-                               crop )
+                               findFirstNonZeroElement )
 from label_reader import ( getXlabel,
                            getYlabel )
 
@@ -91,6 +90,7 @@ def extractPlot(img, xaxis, yaxis):
 
   # Transform to gray colorspace and threshold the image
   gray = img
+  # gray = cv2.GaussianBlur(gray, (7,7), 0)
   _, thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
 
   # Perform opening on the thresholded image (erosion followed by dilation)
@@ -100,6 +100,11 @@ def extractPlot(img, xaxis, yaxis):
   # Search for contours and select the biggest one and draw it on mask
   contours, hierarchy = cv2.findContours(opening,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
   cnt = max(contours, key=cv2.contourArea)
+  # x = list(map(lambda x: x[0][0], cnt))
+  # y = list(map(lambda y: y[0][1], cnt))
+  # plt.figure()
+  # plt.plot(x,y)
+  # plt.show()
   cv2.drawContours(mask, [cnt], 0, 255, -1)
 
   # Perform a bitwise operation
@@ -120,8 +125,8 @@ def extractPlot(img, xaxis, yaxis):
       res[first_y, first_x] = 255
 
   # Display the image
-  cv2.imshow('original', img)
-  cv2.imshow('img', res)
+  # cv2.imshow('original', img)
+  # cv2.imshow('img', res)
   cv2.waitKey(0)
   cv2.destroyAllWindows()
 

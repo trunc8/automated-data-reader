@@ -10,7 +10,7 @@ from axis_processing import ( eliminateYTitle,
                               eliminateXTitle,
                               eliminateXTicks )
 from helper_functions import ( deep_copy_params, 
-															 crop )
+															 crop_black_border )
 
 @deep_copy_params
 def getYlabel(img, xaxis):
@@ -62,7 +62,7 @@ def getYlabel(img, xaxis):
     # We suspect that the numbers are rotated 90 deg CCW
     for i,lab in enumerate(label_images):
       lab = imutils.rotate(lab, -90)
-      lab = crop(lab)
+      lab = crop_black_border(lab)
       text = pytesseract.image_to_string(lab, lang="eng", config="--psm 6 digits")
       # print(f"Label{i}: {text}")
       try:
