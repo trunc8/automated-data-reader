@@ -134,6 +134,7 @@ def main():
   img = cv2.cvtColor(color_img, cv2.COLOR_BGR2GRAY)
   
   # Processing
+  plt.figure("Pre-OCR")
   trimmed_img = trimWhitespace(img)
   xaxis, yaxis = getAxes(trimmed_img)
   zipped_x, zipped_y = label_reader.getLabels(trimmed_img, xaxis, yaxis)
@@ -145,8 +146,8 @@ def main():
   # extractPlot(trimmed_img, xaxis, yaxis)
   
   # to maximize
-  plt.get_current_fig_manager().full_screen_toggle()
-  # plt.show()
+  # plt.get_current_fig_manager().full_screen_toggle()
+  plt.show()
 
 
 if __name__=='__main__':
