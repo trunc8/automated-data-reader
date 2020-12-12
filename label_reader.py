@@ -5,14 +5,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytesseract
 
-from axis_processing import ( eliminateYTitle,
-                              eliminateYTicks,
-                              eliminateXTitle,
-                              eliminateXTicks )
-from helper_functions import ( deep_copy_params, 
-															 crop_black_border )
+# Python scripts
+import axis_processing, helper_functions
 
-@deep_copy_params
+@helper_functions.deep_copy_params
 def getYlabel(img, xaxis):
   label_images = []
   ylabels = []
@@ -20,8 +16,8 @@ def getYlabel(img, xaxis):
   img = img[:,:max(0,xaxis['start']-5)]
 
   # Eliminate y title and tick marks
-  img = eliminateYTitle(img)
-  img = eliminateYTicks(img)
+  img = axis_processing.eliminateYTitle(img)
+  img = axis_processing.eliminateYTicks(img)
   
   # Obtain labels
   height, width = img.shape
@@ -62,7 +58,7 @@ def getYlabel(img, xaxis):
     # We suspect that the numbers are rotated 90 deg CCW
     for i,lab in enumerate(label_images):
       lab = imutils.rotate(lab, -90)
-      lab = crop_black_border(lab)
+      lab = helper_functions.crop_black_border(lab)
       text = pytesseract.image_to_string(lab, lang="eng", config="--psm 6 digits")
       # print(f"Label{i}: {text}")
       try:
@@ -85,7 +81,7 @@ def getYlabel(img, xaxis):
   return zipped_y
 
 
-@deep_copy_params
+@helper_functions.deep_copy_params
 def getXlabel(img, yaxis):
   label_images = []
   xlabels = []
@@ -93,8 +89,8 @@ def getXlabel(img, yaxis):
   img = img[yaxis['end']+10:,:]
 
   # Eliminate y title and tick marks
-  img = eliminateXTitle(img)
-  img = eliminateXTicks(img)
+  img = axis_processing.eliminateXTitle(img)
+  img = axis_processing.eliminateXTicks(img)
   
   # Obtain labels
   height, width = img.shape
@@ -141,3 +137,9 @@ def getXlabel(img, yaxis):
 
   zipped_x = sorted(zip(xpixels, xlabels)) # index of both lists in ascending order of xpixels
   return zipped_x
+
+
+def getLabels(img, xaxis, yaxis):
+  zipped_x = getXlabel(img, yaxis)
+  zipped_y = getYlabel(img, xaxis)
+  return [zipped_x,zipped_y]

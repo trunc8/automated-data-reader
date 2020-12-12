@@ -5,13 +5,10 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 
-from helper_functions import ( deep_copy_params,
-                               findLastNonZeroElement,
-                               findFirstNonZeroElement )
-from label_reader import ( getXlabel,
-                           getYlabel )
+# Python scripts
+import helper_functions, label_reader
 
-@deep_copy_params
+@helper_functions.deep_copy_params
 def trimWhitespace(img):
   height, width = img.shape
   margin = 5
@@ -41,8 +38,8 @@ def getAxes(img):
   sum_along_columns = np.sum(cropped_openedx, axis = 0)
   yaxis_col = np.argmax(sum_along_columns)
   yaxis = {
-    'start': findFirstNonZeroElement(cropped_openedx[:,yaxis_col]),
-    'end': findLastNonZeroElement(cropped_openedx[:,yaxis_col])
+    'start': helper_functions.findFirstNonZeroElement(cropped_openedx[:,yaxis_col]),
+    'end': helper_functions.findLastNonZeroElement(cropped_openedx[:,yaxis_col])
   }
 
   # processing opened y to get X-axis
@@ -51,8 +48,8 @@ def getAxes(img):
   sum_along_rows = np.sum(cropped_openedy, axis = 1)
   xaxis_row = np.argmax(sum_along_rows)
   xaxis = {
-    'start': findFirstNonZeroElement(cropped_openedy[xaxis_row, :]),
-    'end': findLastNonZeroElement(cropped_openedy[xaxis_row, :])
+    'start': helper_functions.findFirstNonZeroElement(cropped_openedy[xaxis_row, :]),
+    'end': helper_functions.findLastNonZeroElement(cropped_openedy[xaxis_row, :])
   }
 
   # Plotting
@@ -74,13 +71,7 @@ def getAxes(img):
   return [xaxis, yaxis]
 
 
-def getLabels(img, xaxis, yaxis):
-  zipped_x = getXlabel(img, yaxis)
-  zipped_y = getYlabel(img, xaxis)
-  return [zipped_x,zipped_y]
-
-
-@deep_copy_params
+@helper_functions.deep_copy_params
 def extractPlot(img, xaxis, yaxis):
   margin = 4
   img = img[yaxis['start']+margin:yaxis['end']-margin, 
@@ -145,12 +136,13 @@ def main():
   # Processing
   trimmed_img = trimWhitespace(img)
   xaxis, yaxis = getAxes(trimmed_img)
-  zipped_x, zipped_y = getLabels(trimmed_img, xaxis, yaxis)
+  zipped_x, zipped_y = label_reader.getLabels(trimmed_img, xaxis, yaxis)
 
   print(f"X-axis: {xaxis}\nY-axis: {yaxis}")
   print("X pixels:\n", list(zipped_x))
   print("Y pixels:\n", list(zipped_y))
-  extractPlot(trimmed_img, xaxis, yaxis)
+
+  # extractPlot(trimmed_img, xaxis, yaxis)
   
   # to maximize
   plt.get_current_fig_manager().full_screen_toggle()
