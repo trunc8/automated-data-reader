@@ -8,6 +8,7 @@ import numpy as np
 # Python scripts
 import helper_functions, label_reader
 
+
 @helper_functions.deep_copy_params
 def trimWhitespace(img):
   height, width = img.shape
@@ -121,6 +122,16 @@ def extractPlot(img, xaxis, yaxis):
   cv2.waitKey(0)
   cv2.destroyAllWindows()
 
+
+def mapPixelToCoordinate(coord):
+  ## Clean up coord -> (pixel, label) data
+  
+  # zipped_x[4] = (280, 5.0)
+  l1, l2 = map(list, zip(*coord))
+  m, b = helper_functions.bestFitSlopeAndIntercept(l1,l2)
+  print(m*80+b) # 7 for n=2
+
+
 def main():
   # Read args from terminal
   parser = argparse.ArgumentParser(description="Extract text from input image")
@@ -138,16 +149,21 @@ def main():
   trimmed_img = trimWhitespace(img)
   xaxis, yaxis = getAxes(trimmed_img)
   zipped_x, zipped_y = label_reader.getLabels(trimmed_img, xaxis, yaxis)
+  xcoord = list(zipped_x)
+  ycoord = list(zipped_y)
 
   print(f"X-axis: {xaxis}\nY-axis: {yaxis}")
-  print("X pixels:\n", list(zipped_x))
-  print("Y pixels:\n", list(zipped_y))
+  print("X pixels:\n", xcoord)
+  print("Y pixels:\n", ycoord)
+
+  print("Map pixel to coordinate(Y)")
+  mapPixelToCoordinate(ycoord)
 
   # extractPlot(trimmed_img, xaxis, yaxis)
   
   # to maximize
   # plt.get_current_fig_manager().full_screen_toggle()
-  plt.show()
+  # plt.show()
 
 
 if __name__=='__main__':
