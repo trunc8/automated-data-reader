@@ -1,12 +1,13 @@
 # trunc8 did this
 import argparse
 import cv2
+import logging
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 
 # Python scripts
-import helper_functions, label_reader
+import coordinate_mapper, helper_functions, label_reader
 
 
 @helper_functions.deep_copy_params
@@ -123,16 +124,10 @@ def extractPlot(img, xaxis, yaxis):
   cv2.destroyAllWindows()
 
 
-def mapPixelToCoordinate(coord):
-  ## Clean up coord -> (pixel, label) data
-  
-  # zipped_x[4] = (280, 5.0)
-  l1, l2 = map(list, zip(*coord))
-  m, b = helper_functions.bestFitSlopeAndIntercept(l1,l2)
-  print(m*80+b) # 7 for n=2
 
 
 def main():
+  logging.debug("The program is starting...")
   # Read args from terminal
   parser = argparse.ArgumentParser(description="Extract text from input image")
   parser.add_argument("-n", default="", help="image number")
@@ -148,23 +143,34 @@ def main():
   plt.figure("Pre-OCR")
   trimmed_img = trimWhitespace(img)
   xaxis, yaxis = getAxes(trimmed_img)
-  zipped_x, zipped_y = label_reader.getLabels(trimmed_img, xaxis, yaxis)
-  xcoord = list(zipped_x)
-  ycoord = list(zipped_y)
+  xcoord, ycoord = label_reader.getLabels(trimmed_img, xaxis, yaxis)
 
-  print(f"X-axis: {xaxis}\nY-axis: {yaxis}")
-  print("X pixels:\n", xcoord)
-  print("Y pixels:\n", ycoord)
+  logging.debug("X axis pixels:")
+  logging.debug(xaxis)
+  logging.debug("")
+  logging.debug("Y axis pixels:")
+  logging.debug(yaxis)
+  logging.debug("")
+  logging.debug("X coordinates:")
+  logging.debug(xcoord)
+  logging.debug("")
+  logging.debug("Y coordinates:")
+  logging.debug(ycoord)
+  logging.debug("")
 
-  print("Map pixel to coordinate(Y)")
-  mapPixelToCoordinate(ycoord)
+  m_y, b_y = coordinate_mapper.mapPixelToCoordinate(ycoord)
+  m_x, b_x = coordinate_mapper.mapPixelToCoordinate(xcoord)
 
-  # extractPlot(trimmed_img, xaxis, yaxis)
+  extractPlot(trimmed_img, xaxis, yaxis)
   
   # to maximize
   # plt.get_current_fig_manager().full_screen_toggle()
   # plt.show()
+  logging.debug("The program ended successfully!")
 
 
 if __name__=='__main__':
+  logging.basicConfig(level=logging.DEBUG, format='%(levelname)s %(asctime)s.%(msecs)03d %(message)s', datefmt='%H:%M:%S')
+  # Below is a toggle switch for logging messages
+  # logging.disable(sys.maxsize)
   main()

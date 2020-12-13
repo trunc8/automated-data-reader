@@ -8,6 +8,7 @@ import pytesseract
 # Python scripts
 import axis_processing, helper_functions
 
+
 @helper_functions.deep_copy_params
 def getYlabel(img, xaxis):
   label_images = []
@@ -37,7 +38,7 @@ def getYlabel(img, xaxis):
     label_images.append(img[max(0,y-margin):min(height,y+h+margin), 
                             max(0,x-margin):min(width,x+w+margin)])
     
-  ylabels = [None]*len(ypixels)
+  ylabels = [float('inf')]*len(ypixels)
   plt.figure("y-label OCR")
   for i,lab in enumerate(label_images):
     lab = cv2.resize(lab, None, fx=10.5, fy=10.5, interpolation=cv2.INTER_CUBIC)
@@ -56,7 +57,7 @@ def getYlabel(img, xaxis):
     plt.title(f'label{i}'), plt.axis('off')
     # cv2.imshow(f'label{i}', lab)
 
-  if (len(ylabels)-ylabels.count(None) < 3):
+  if (ylabels.count(float('inf')) > len(ylabels) - 3):
     # Not enough points to perform linear interpolation
     # We suspect that the numbers are rotated 90 deg CCW
     for i,lab in enumerate(label_images):
@@ -82,7 +83,7 @@ def getYlabel(img, xaxis):
   plt.title('Behind Y axis'), plt.xticks([]), plt.yticks([])
 
   zipped_y = zip(ypixels, ylabels)
-  return zipped_y
+  return list(zipped_y)
 
 
 @helper_functions.deep_copy_params
@@ -114,7 +115,7 @@ def getXlabel(img, yaxis):
     label_images.append(img[max(0,y-margin):min(height,y+h+margin), 
                             max(0,x-margin):min(width,x+w+margin)])
     
-  xlabels = [None]*len(xpixels)
+  xlabels = [float('inf')]*len(xpixels)
   plt.figure("x-label OCR")
   for i,lab in enumerate(label_images):
     lab = cv2.resize(lab, None, fx=10.5, fy=10.5, interpolation=cv2.INTER_CUBIC)
@@ -144,10 +145,10 @@ def getXlabel(img, yaxis):
   plt.title('Below X axis'), plt.xticks([]), plt.yticks([])
 
   zipped_x = sorted(zip(xpixels, xlabels)) # index of both lists in ascending order of xpixels
-  return zipped_x
+  return list(zipped_x)
 
 
 def getLabels(img, xaxis, yaxis):
-  zipped_x = getXlabel(img, yaxis)
-  zipped_y = getYlabel(img, xaxis)
-  return [zipped_x,zipped_y]
+  xcoord = getXlabel(img, yaxis)
+  ycoord = getYlabel(img, xaxis)
+  return [xcoord,ycoord]
