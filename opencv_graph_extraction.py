@@ -1,24 +1,14 @@
 # trunc8 did this
-import argparse
+import collections
+import copy
+import csv
 import cv2
-import logging
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+# import matplotlib.gridspec as gridspec
 import numpy as np
 
 # Python scripts
-import coordinate_mapper, helper_functions, label_reader
-
-
-@helper_functions.deep_copy_params
-def trimWhitespace(img):
-  height, width = img.shape
-  margin = 5
-  img_copy = 255*(img < 128).astype(np.uint8) # To invert the text to white
-  coords = cv2.findNonZero(img_copy) # Find all non-zero points (text)
-  x, y, w, h = cv2.boundingRect(coords) # Find minimum spanning bounding box
-  return img[max(0, y-margin):min(height, y+h+margin), 
-             max(0, x-margin):min(width, x+w+margin)] # Crop the image
+import helper_functions
 
 
 def getAxes(img):
@@ -74,103 +64,62 @@ def getAxes(img):
 
 
 @helper_functions.deep_copy_params
-def extractPlot(img, xaxis, yaxis):
-  margin = 4
-  img = img[yaxis['start']+margin:yaxis['end']-margin, 
-            xaxis['start']+margin:xaxis['end']-margin]
-  h,w = img.shape[:2]
-  mask = np.zeros((h,w), np.uint8)
+def extractPlot(img, xaxis, yaxis, m_x, b_x, m_y, b_y):
+  step_size = 1
+  margin = 10
+  x_start = xaxis['start']+margin
+  y_start = yaxis['start']+margin
+  img = img[y_start:yaxis['end']-margin, 
+            x_start:xaxis['end']-margin]
+  h,w = img.shape
 
-  # Transform to gray colorspace and threshold the image
-  gray = img
-  # gray = cv2.GaussianBlur(gray, (7,7), 0)
-  _, thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
-
-  # Perform opening on the thresholded image (erosion followed by dilation)
-  kernel = np.ones((2,2),np.uint8)
-  opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
-
-  # Search for contours and select the biggest one and draw it on mask
-  contours, hierarchy = cv2.findContours(opening,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
-  cnt = max(contours, key=cv2.contourArea)
-  # x = list(map(lambda x: x[0][0], cnt))
-  # y = list(map(lambda y: y[0][1], cnt))
-  # plt.figure()
-  # plt.plot(x,y)
-  # plt.show()
-  cv2.drawContours(mask, [cnt], 0, 255, -1)
-
-  # Perform a bitwise operation
-  res = cv2.bitwise_and(img, img, mask=mask)
-
-  # Threshold the image again
-  gray = img
-  _, thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
-
-  # Find all non white pixels
-  non_zero = cv2.findNonZero(thresh)
-
-  # Transform all other pixels in non_white to white
-  for i in range(0, len(non_zero)):
-      first_x = non_zero[i][0][0]
-      first_y = non_zero[i][0][1]
-      first = res[first_y, first_x]
-      res[first_y, first_x] = 255
+  # Remove noise
+  kernel = np.ones((5,5),np.uint8)
+  opening = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
+  # Invert during thresholding
+  _, thresh = cv2.threshold(opening,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+  
+  with open('graph_coordinates.csv', mode='w') as coordinates_file:
+    coordinates_writer = csv.writer(coordinates_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+    for x_pixel in range(0, w, step_size):
+      index1 = helper_functions.findFirstNonZeroElement(thresh[:,x_pixel])
+      if index1 != -1:
+        index2 = helper_functions.findLastNonZeroElement(thresh[:,x_pixel])
+        y_pixel = (index1 + index2)/2
+        x_coord = round(m_x*(x_start+x_pixel)+b_x, 2)
+        y_coord = round(m_y*(y_start+y_pixel)+b_y, 2)
+        coordinates_writer.writerow([x_coord, y_coord])
 
   # Display the image
   # cv2.imshow('original', img)
-  # cv2.imshow('img', res)
+  # cv2.imshow('opened', opening)
+  # cv2.imshow('img', thresh)
   cv2.waitKey(0)
   cv2.destroyAllWindows()
 
 
+def mapPixelToCoordinate(coord):
+  # coord is composed of (pixels, labels)
+  # Clean up labels data
+  pixels, labels = map(list, zip(*coord))
+  label_length = len(labels)
+  cleaned_labels = copy.deepcopy(labels)
 
-
-def main():
-  logging.debug("The program is starting...")
-  # Read args from terminal
-  parser = argparse.ArgumentParser(description="Extract text from input image")
-  parser.add_argument("-n", default="", help="image number")
-  args = parser.parse_args()
-
-  # Read file
-  # filename = 'images/Line-Chart4.jpeg'
-  filename = f'images/Line-Chart{args.n}.png'
-  color_img = cv2.imread(filename)
-  img = cv2.cvtColor(color_img, cv2.COLOR_BGR2GRAY)
+  # We have ordered sequence of labels.
+  # Some values may have been detected incorrectly by OCR.
+  # In order to find most reliable label, we use the idea of arithmetic
+  # progression series to find the "common difference": a_{n}=a_{1}+(n-1)*d
+  # We use that common difference to correct all other labels.
+  # Formula used below: d = (a_{j}-a_{i})/(j-i)
+  for i in range(label_length-1):
+    if labels[i] != float('inf'): # All differences expected to be inf in this case. Discard.
+      common_difference = [(labels[j]-labels[i])/(j-i) for j in range(i+1, label_length)]
+      occurrence_frequences = collections.Counter(common_difference)
+      mode, mode_freq = occurrence_frequences.most_common(1)[0]
+      if (mode != float('inf') and mode_freq > 1):
+        cleaned_labels = [labels[i]+(j-i)*mode for j in range(label_length)]
+        break
   
-  # Processing
-  plt.figure("Pre-OCR")
-  trimmed_img = trimWhitespace(img)
-  xaxis, yaxis = getAxes(trimmed_img)
-  xcoord, ycoord = label_reader.getLabels(trimmed_img, xaxis, yaxis)
-
-  logging.debug("X axis pixels:")
-  logging.debug(xaxis)
-  logging.debug("")
-  logging.debug("Y axis pixels:")
-  logging.debug(yaxis)
-  logging.debug("")
-  logging.debug("X coordinates:")
-  logging.debug(xcoord)
-  logging.debug("")
-  logging.debug("Y coordinates:")
-  logging.debug(ycoord)
-  logging.debug("")
-
-  m_y, b_y = coordinate_mapper.mapPixelToCoordinate(ycoord)
-  m_x, b_x = coordinate_mapper.mapPixelToCoordinate(xcoord)
-
-  extractPlot(trimmed_img, xaxis, yaxis)
-  
-  # to maximize
-  # plt.get_current_fig_manager().full_screen_toggle()
-  # plt.show()
-  logging.debug("The program ended successfully!")
-
-
-if __name__=='__main__':
-  logging.basicConfig(level=logging.DEBUG, format='%(levelname)s %(asctime)s.%(msecs)03d %(message)s', datefmt='%H:%M:%S')
-  # Below is a toggle switch for logging messages
-  # logging.disable(sys.maxsize)
-  main()
+  # Fitting line through the (pixels, cleaned_labels) data
+  m, b = helper_functions.bestFitSlopeAndIntercept(pixels, cleaned_labels)
+  return m, b
