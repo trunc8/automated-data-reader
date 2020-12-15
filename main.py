@@ -58,12 +58,13 @@ def main():
 
   # to maximize
   # plt.get_current_fig_manager().full_screen_toggle()
-  # plt.show()
+  plt.show()
   logging.info("The program ended successfully!")
 
 
 if __name__=='__main__':
   logging.basicConfig(level=logging.INFO, format='%(levelname)s %(asctime)s.%(msecs)03d %(message)s', datefmt='%H:%M:%S')
+  logging.getLogger("matplotlib").setLevel(logging.WARNING)
   ## Below is a toggle switch for logging messages
   # logging.disable(sys.maxsize)
   try:
